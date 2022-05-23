@@ -1,0 +1,84 @@
+version: "3"
+services:
+  postgresdb:
+    build:
+      context: ./postgres
+      dockerfile: Dockerfile
+    environment:
+      POSTGRES_PASSWORD: password
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+
+
+  users_service:
+    build: ./user_service
+    ports:
+      - "1234:1234"
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: superuser
+      RABBITMQ_PASS: password
+      RABBITMQ_PORT: 5672
+      HOST: postgresdb
+      USER: postgres
+      PASSWORD: password
+      DATABASE: pet_project
+    volumes:
+      - ./user_service:/app/user_service
+    depends_on:
+      - postgresdb
+      - rabbitmq
+    restart: unless-stopped
+
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: superuser
+      RABBITMQ_DEFAULT_PASS: password
+    volumes:
+      - "rabbitmq_data:/data"
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - users_service
+
+
+  users_service_consumer:
+    build: ./user_service
+
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: superuser
+      RABBITMQ_PASS: password
+      RABBITMQ_PORT: 5672
+      HOST: postgresdb
+      USER: postgres
+      PASSWORD: password
+      DATABASE: pet_project
+    volumes:
+      - ./user_service:/app/user_service
+    depends_on:
+      - postgresdb
+      - rabbitmq
+    restart: on-failure
+    command:
+      "entrypoint_consumer.sh"
+
+volumes:
+  rabbitmq_data:
+
+
+
+
